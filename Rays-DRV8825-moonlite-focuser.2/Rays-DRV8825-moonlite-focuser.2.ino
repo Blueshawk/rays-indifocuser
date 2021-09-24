@@ -15,34 +15,34 @@
 // define serial port speed - valid values are 9600 14400 19200 28800 38400 57600 115200
 #define SerialPortSpeed 9600
 
-// these are stored in EEPROM - all variables in a structure
+// Variables stored in EEPROM - all variables in a struct accessed with ep_storage.(varname)
 struct config_t {
-  int validdata;       // if this is 99 then data is valid
-  long fposition;       // last focuser position
-  long maxstep;         // max steps
-  int stepmode;                  // stepping mode
-  // indicates stepmode, full, half, 1/4, 1/8. 1/16. 1/32 [1.2.4.8.16.32]
-  double stepsize;               // the step size in microns, ie 7.2
-  boolean ReverseDirection;      // reverse direction
-  boolean coilPwr;               // coil pwr
-  boolean stepsizeenabled;       // if true, controller returns step size
+  int validdata;                  // if this is 99 then data is valid
+  long fposition;                 // last focuser position
+  long maxstep;                   // maximum step position
+  int stepmode;                   // stepping mode
+  // indicates stepmode, full, half, 1/4, 1/8. 1/16. 1/32 [1.2.4.8.16.32] (recommend full to save power)
+  double stepsize;                // the step size in microns, ie 7.2
+  boolean ReverseDirection;       // relative Forward/Reverse control
+  boolean coilPwr;                // controls power to the stepper
+  boolean stepsizeenabled;        // if true, controller returns step size
 } ep_Storage;
 
-int datasize;      // will hold size of the struct ep_Storage - 8 bytes
-int nlocations;    // number of storage locations available in EEPROM
-int currentaddr;   // will be address in eeprom of the data stored
-boolean writenow;     // should we update values in eeprom
-boolean found;        // did we find any stored values?
-long previousMillis = 0L;   // used as a delay whenever the EEPROM settings need to be updated
+int datasize;                     // will hold size of the struct ep_Storage
+int nlocations;                   // number of storage locations available in EEPROM
+int currentaddr;                  // address in eeprom of the data store. This increments to reduce eeprom wear
+boolean writenow;                 // set true to update values in eeprom when a change is made
+boolean found;                    // true if stored data reads okay
+long previousMillis = 0L;         // used as a delay whenever the EEPROM settings need to be updated
 long motor_interval = 60000L;     // interval in milliseconds to wait after a move before writing settings to EEPROM, 10s
-int Backlash = 0; // backlash value
+int Backlash = 0;                 // backlash value
 
 const String programName = "Ray's Moonlite";
 const String programVersion = "1.6.8"; // Does indi use this?
 
-// Stepper motor_ stuff, control pins for DRV8825 board
-//set DRV sleep and reset to high in setup() to 
-//allow run due simple to header construction can be hardwired.
+//Control pins for DRV8825 board
+//set DRV sleep and reset to high in setup() for simple header pin connection. Can also be hardwired high.
+
 #define motor_Dir     5
 #define motor_Step    6
 #define slp           7
@@ -51,13 +51,12 @@ const String programVersion = "1.6.8"; // Does indi use this?
 #define motor_M1      10
 #define motor_M2      11
 #define motor_Enable  12
-// ENABLE - Setting CoilPwr.false in setup() allows remote enable switching
-// currently set on to reduce power use RBW
-int boardstate;
-#define 1  1
-#define 0 0
 
-// NOTE: If using microstepping, coil power should always be ON and do NOT disable the board
+// NOTE: If using microstepping, coil power should always be on or the motor will settle to the nearest full step.
+
+  //Setting CoilPwr false in setup() allows remote enable switching
+int boardstate;
+
 // stepontime - time in microseconds that coil power is ON for one step, board requires 2us pulse
 int stepontime = 10;
 
@@ -77,8 +76,8 @@ int savedmotor_Speed = motor_Speed;       // used to save original speed if slow
 #define Buzzer A3
 
 // Default initial positions if not set/overriden by Ascom Driver or Winapp
-long currentPosition = 5000L;   // current position
-long targetPosition = 5000L;    // target position
+long currentPosition = 10000L;   // current position
+long targetPosition = 10000L;    // target position
 long maxFocuserLimit = 100000L;  // arbitary focuser limit
 long maxSteps = 100000L;         // maximum position of focuser
 long maxIncrement = 100000L;      // maximum number of steps permitted in one move
@@ -87,7 +86,7 @@ boolean gotonewposition = false;  // used by moonlite after an SN command follow
 
 char inChar;                  // used to read a character from serial port
 boolean isMoving = false;     // is the motor_ currently moving
-long pos;
+long pos ;                     //this one needs cleanup as it is redefined locally in a routine.
 
 #define MAXCOMMAND 20
 char motor_cmd[MAXCOMMAND];         // these are for handling and processing serial commands
@@ -122,12 +121,12 @@ void software_Reboot()
 }
 
 // disable the stepper motor_ outputs - coil power off controlled via ENABLE pin. Avoid if microstepping.
-void disableoutput() {                           
-  digitalWrite(motor_Enable, HIGH);               
+void disableoutput() {
+  digitalWrite(motor_Enable, HIGH);
 }
 
 // enable the stepper motor_ outputs - coil power on
-void enableoutput() {                             
+void enableoutput() {
   digitalWrite(motor_Enable, LOW);
 }
 
@@ -176,9 +175,9 @@ void clockwise() {
   }
 }
 
-// set full or microstepping mode by switching m0,m1,m2 on drv8825
+// Set full or microstepping mode by switching m0,m1,m2 on drv8825
 // m0/m1/m2 sets stepping mode 000 = F, 100 = 1/2, 010 = 1/4, 110 = 1/8, 001 = 1/16, 101 = 1/32
-//Set the current limit to run in current regulation for microstepping to work correctly. 
+// Set the current limit to run in current regulation for microstepping to work correctly.
 
 void setstepmode() {
   switch ( ep_Storage.stepmode )
@@ -224,32 +223,31 @@ void setstepmode() {
 
 // SerialEvent occurs via interupt whenever new data comes in the serial RX. See Moonlite protocol list at end of file
 void serialEvent() {
-}
-while (Serial.available() && !eoc)
-{
-  inChar = Serial.read();
-  if (inChar != '#' && inChar != ':')           // : starts the command frame # ends it
+  while (Serial.available() && !eoc)
   {
-    line[idx++] = inChar;
-    if (idx >= MAXCOMMAND)
+    inChar = Serial.read();
+    if (inChar != '#' && inChar != ':')           // : starts the command frame # ends it
     {
-      idx = MAXCOMMAND - 1;
+      line[idx++] = inChar;
+      if (idx >= MAXCOMMAND)
+      {
+        idx = MAXCOMMAND - 1;
+      }
+    }
+    else
+    {
+      if (inChar == '#')
+      {
+        eoc = 1;
+        idx = 0;
+        // process the command string when a hash arrives:
+        processCommand(line);
+        eoc = 0;
+      }
     }
   }
-  else
-  {
-    if (inChar == '#')
-    {
-      eoc = 1;
-      idx = 0;
-      // process the command string when a hash arrives:
-      processCommand(line);
-      eoc = 0;
-    }
-  }
-}
-}
 
+}
 // Serial Commands
 void processCommand(String command)
 {
@@ -266,29 +264,29 @@ void processCommand(String command)
   }
 
   memset(line, 0, MAXCOMMAND);
- 
+
   eoc = 0;
   idx = 0;
 
   // set fullstep mode
   if (!strcasecmp( motor_cmd, "SF"))
   {
-    ep_Storage.stepmode = 4;
+    ep_Storage.stepmode = 1;
     setstepmode();
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
   // set halfstep mode
   else if (!strcasecmp( motor_cmd, "SH"))
   {
-    ep_Storage.stepmode = 8;
+    ep_Storage.stepmode = 2;
     setstepmode();
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
-  // whether half-step is enabled or not, moonlite always return "00"
+  // returns step mode - half(2) or full(1)
   else if (!strcasecmp( motor_cmd, "GH"))
   {
     if ( ep_Storage.stepmode == 2 )
@@ -297,14 +295,13 @@ void processCommand(String command)
       Serial.print("00#");
   }
 
-  // set stepmode
   // ep_Storage command
   else if (!strcasecmp( motor_cmd, "SS"))
   {
     pos = hexstr2long(param);
     ep_Storage.stepmode = pos;
     setstepmode();
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
@@ -354,7 +351,7 @@ void processCommand(String command)
   else if (!strcasecmp( motor_cmd, "GP"))
   {
     char tempString[6];
-    sprintf(tempString, "%04X", currentPosition);
+    sprintf(tempString, "%04X", ep_Storage.fposition);
     Serial.print(tempString);
     Serial.print("#");
   }
@@ -517,7 +514,7 @@ void processCommand(String command)
       ep_Storage.coilPwr = false;
     else
       ep_Storage.coilPwr = true;
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
@@ -530,7 +527,7 @@ void processCommand(String command)
       ep_Storage.ReverseDirection = false;
     else
       ep_Storage.ReverseDirection = true;
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
@@ -560,7 +557,7 @@ void processCommand(String command)
     gotonewposition = false;
     isMoving = false;
     targetPosition = currentPosition;
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
@@ -588,15 +585,15 @@ void processCommand(String command)
   else if (!strcasecmp( motor_cmd, "SP"))
   {
     pos = hexstr2long(param);
-    if ( pos > maxSteps )
-      pos = maxSteps;
+    //if ( pos > maxSteps )
+    // pos = maxSteps;
     if ( pos < 0 )
       pos = 0;
     currentPosition = pos;
     targetPosition = pos;
     // signal that the focuser position has changed and should be saved to eeprom
-    writenow = true;             // updating of EEPROM ON
-    previousMillis = millis();   // start time interval
+    writenow = true;                           //Update EEPROM
+    previousMillis = millis();                 // start time interval
     gotonewposition = false;
     isMoving = false;
   }
@@ -606,8 +603,8 @@ void processCommand(String command)
   else if (!strcasecmp( motor_cmd, "SN"))
   {
     pos = hexstr2long(param);
-    if ( pos > maxSteps )
-      pos = maxSteps;
+    //if ( pos > maxSteps )
+    // pos = maxSteps;
     if ( pos < 0 )
       pos = 0;
     targetPosition = pos;
@@ -668,11 +665,11 @@ void processCommand(String command)
   else if (!strcasecmp( motor_cmd, "SM"))
   {
     pos = hexstr2long(param);
-    if ( pos > maxFocuserLimit )
-      pos = maxFocuserLimit;
+    //if ( pos > maxFocuserLimit )
+    //  pos = maxFocuserLimit;
     // avoid setting maxSteps too low
-    if ( pos < 1000 )
-      pos = 1000;
+    if ( pos < 10000 )
+      pos = 10000;
     // for NEMA17 at 400 steps this would be 5 full rotations of focuser knob
     // for 28BYG-28 this would be less than 1/2 a revolution of focuser knob
     maxSteps = pos;
@@ -680,7 +677,7 @@ void processCommand(String command)
     if ( maxIncrement > maxSteps )
       maxIncrement = maxSteps;
     // signal that the focuser position has changed and should be saved to eeprom
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
@@ -757,11 +754,11 @@ void processCommand(String command)
     {
       ep_Storage.stepsizeenabled = true;
     }
-    else   // any other value please disable
+    else   //disable
     {
       ep_Storage.stepsizeenabled = false;
     }
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
@@ -777,7 +774,7 @@ void processCommand(String command)
       tempstepsize = 0;
     }
     ep_Storage.stepsize = tempstepsize;
-    writenow = true;             // updating of EEPROM ON
+    writenow = true;             //Update EEPROM
     previousMillis = millis();   // start time interval
   }
 
@@ -824,8 +821,8 @@ void processCommand(String command)
 void ResetFocuserDefaults()
 {
   ep_Storage.validdata = 99;
-  ep_Storage.fposition = 5000L;
-  ep_Storage.maxstep = 60000L;
+  ep_Storage.fposition = 10000L;
+  ep_Storage.maxstep = 90000L;
   ep_Storage.stepmode = 1;
   ep_Storage.ReverseDirection = false;
   ep_Storage.coilPwr = false;
@@ -872,10 +869,10 @@ void setup()
   digitalWrite( gledOUT, 1 );
   pinMode(rst, OUTPUT);
   pinMode(slp, OUTPUT);
-  //set DRV sleep and reset to high to allow run - due simple to header construction 5,6,7,8,9,10,11,12
+  //set DRV sleep and reset always high due to simple header construction 5,6,7,8,9,10,11,12
   digitalWrite(rst, HIGH);
   digitalWrite(slp, HIGH);
-  // start temperature sensor DS18B20
+  // if insalled, a temperature sensor DS18B20
   ch1tempval  = 20.0;
   tprobe1 = 0;        // set probe indicator NOT FOUND
 
@@ -991,8 +988,8 @@ void loop()
     }
 
     isMoving = true;
-    writenow = true;             // updating of EEPROM ON
-    previousMillis = millis();    // keep updating previousMillis whilst focuser is moving
+    writenow = true;             //Update EEPROM
+    previousMillis = millis();    // prevent update until done moving.
 
     // Going Anticlockwise to lower position
     if (targetPosition < currentPosition)
