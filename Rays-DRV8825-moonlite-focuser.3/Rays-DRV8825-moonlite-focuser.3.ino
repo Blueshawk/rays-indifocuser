@@ -3,6 +3,7 @@
    I originally trimmed this down from Robert Brown's earlier focuser code
    To make it easier to read and then modified it to suit motor_ needs,
    but this is now an amalgam of several different focuser drivers as none quite matched the options I wanted.
+.3
 */
 
 #include <Arduino.h>
@@ -35,7 +36,7 @@ long pos;
 long previousMillis = 0L;   // used as a delay whenever the EEPROM settings need to be updated
 long eprom_interval = 2000L;     // interval in milliseconds to wait after a move before writing settings to EEPROM, 10s
 const String programName = "Ray's Moonlite";
-const String programVersion = "2.1"; 
+const String programVersion = "2.1";
 
 // Stepper motor_ stuff, control pins for DRV8825 board
 //set DRV sleep and reset to high in setup() to
@@ -142,7 +143,7 @@ void setstepmode() {
       digitalWrite(motor_M0, 0);
       digitalWrite(motor_M1, 0);
       digitalWrite(motor_M2, 0);
-      ep_Storage.stepmode = 1; 
+      ep_Storage.stepmode = 1;
       break;
   }
 }
@@ -501,9 +502,9 @@ void processCommand(String command)
   // :SDxx# set step delay, only acceptable values are 02, 04, 08, 10, 20 which
   // correspond to a stepping delay of 250, 125, 63, 32 and 16 steps
   // per second respectively. Moonlite only
-   else if (!strcasecmp( motor_cmd, "SD"))
+  else if (!strcasecmp( motor_cmd, "SD"))
   {
-    speed = (maxSpeed / (.5*hexstr2long(param)));
+    speed = (maxSpeed / (.5 * hexstr2long(param)));
     writenow = true;             // updating of EEPROM ON
     previousMillis = millis();   // start time interval
   }
@@ -634,12 +635,14 @@ void processCommand(String command)
   {
     //convert string to integer
     accel = decstr2int(param);
-            /*// convert param to float
-              /*String str = param;
-              str = str + "";      // add end of string terminator
-              double tempaccel = (double) str.toFloat();
-            */
-      if ( accel < 1 ) {accel = 1;}
+    /*// convert param to float
+      /*String str = param;
+      str = str + "";      // add end of string terminator
+      double tempaccel = (double) str.toFloat();
+    */
+    if ( accel < 1 ) {
+      accel = 1;
+    }
     ep_Storage.accel = accel;
     stepper.setAcceleration(accel);
     writenow = true;             // updating of EEPROM ON
@@ -669,38 +672,38 @@ void processCommand(String command)
   // troubleshooting only - reset focuser defaults
   else if (!strcasecmp(motor_cmd, "XZ"))
   {
-//set all addr invalid   
-     for (int lp1 = 0; lp1 < nlocations; lp1++ )
-  { 
-    int addr = lp1 * datasize;
-    ep_Storage.validdata = 0;
-  }
-      currentaddr = 0;
-      //then reset defaults
+    //set all addr invalid
+    for (int lp1 = 0; lp1 < nlocations; lp1++ )
+    {
+      int addr = lp1 * datasize;
+      ep_Storage.validdata = 0;
+    }
+    currentaddr = 0;
+    //then reset defaults
     ResetFocuserDefaults();
     loadFromStorage();
-    
+
     // Set focuser defaults.
     currentPosition = ep_Storage.fposition;
     targetPosition = ep_Storage.fposition;
     maxSteps = ep_Storage.maxstep;
-  
+
   }
- 
 }
 void ResetFocuserDefaults()
 {
 
   ep_Storage.validdata = 99;
   ep_Storage.fposition = 15000L;
-  ep_Storage.maxstep = 20000L;
+  ep_Storage.maxstep = 100000L;
   ep_Storage.stepmode = 1;
   ep_Storage.ReverseDirection = false;
   ep_Storage.coilPwr = false;
   ep_Storage.accel = 700;                     //sets accel rate = N steps per second per second.
-  ep_Storage.backlash = 0; 
+  ep_Storage.backlash = 0;
   EEPROM_writeAnything(currentaddr, ep_Storage);    // update values in EEPROM
-}  void loadFromStorage() {
+}
+void loadFromStorage() {
   currentPosition = ep_Storage.fposition;
   targetPosition = ep_Storage.fposition;
   maxSteps = ep_Storage.maxstep;
@@ -708,8 +711,8 @@ void ResetFocuserDefaults()
   accel = ep_Storage.accel;
   stepmode = ep_Storage.stepmode;
   ReverseDirection = ep_Storage.ReverseDirection;
- 
-  }
+
+}
 ////////////////////////// Setup ////////////////////
 void setup()
 {
@@ -753,7 +756,7 @@ void setup()
     EEPROM_readAnything( addr, ep_Storage );
     // check to see if the data is valid
     if ( ep_Storage.validdata == 99 )
-    {  currentaddr = addr;
+    { currentaddr = addr;
       found = true;
     }
   }
@@ -762,7 +765,7 @@ void setup()
     // mark current eeprom address as invalid and use next one
     // each time focuser starts it will read current storage, set it to invalid, goto next location and
     // write values to there and set it to valid - This helps with eprom longevity.
-    // using it like an array of [0-nlocations], ie 100 storage locations for 1k EEPROM   
+    // using it like an array of [0-nlocations], ie 100 storage locations for 1k EEPROM
     EEPROM_readAnything( currentaddr, ep_Storage );
     ep_Storage.validdata = 0;
     EEPROM_writeAnything(currentaddr, ep_Storage);    // update values in EEPROM
@@ -778,9 +781,9 @@ void setup()
     // If not "found" reset defaults to eprom
     ResetFocuserDefaults();
   }
-   //Reload from storage to variables.
-    loadFromStorage();
-  
+  //Reload from storage to variables.
+  loadFromStorage();
+
   //set physical pin arrangement
   pinMode(  motor_Dir, OUTPUT );
   pinMode(  motor_Step, OUTPUT );
@@ -788,7 +791,7 @@ void setup()
   pinMode(  motor_M1, OUTPUT );
   pinMode(  motor_M2, OUTPUT );
   pinMode( motor_Enable, OUTPUT );    // enable the driver board
-  
+
   // turn off the IN/OUT LEDS and BUZZER
   digitalWrite( bledIN, 0 );
   digitalWrite( gledOUT, 0 );
@@ -818,7 +821,7 @@ void loop()
     currentPosition = stepper.currentPosition();
     millisLastMove = millis();
     previousMillis = millis();         // keep updating previousMillis whilst focuser is moving - for eeprom
-    writenow = true;                  
+    writenow = true;
   }
   else {
     // when stopped release the motor after 2.5sec delay
