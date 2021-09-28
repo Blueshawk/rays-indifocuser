@@ -6,6 +6,6 @@ This focuser was originally based on an older version of Robert Brown's focuser-
 Hardware: 
   I used a drv8825 driver board mounted directly to an arduino nano with a pin header. The motor output is powered by the 12v   battery and a single 4 wire cable plugs into stepper motors on several different telescope OTA's.
 
-News: Switching to a TMC2208 looks to allow single powered operation using a powered usb hub. 
+News: Switching to a TMC2208 looks to allow single powered operation using a powered usb hub - but apparently not with my old floppy drive motors which require higher voltage to achieve lock. 
 
 todo: Get indi/ekos to accept backlash from moonlite compatable controllers, or convert the driver to a standalone one.
