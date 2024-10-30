@@ -38,14 +38,14 @@ long eprom_interval = 2000L;     // interval in milliseconds to wait after a mov
 const String programName = "Ray's Moonlite";
 const String programVersion = "2.1";
 
-// Stepper motor_ stuff, control pins for DRV8825 board
+// Stepper motor_ stuff, control pins for TMC2208 board
 //set DRV sleep and reset to high in setup() to
-//allow run due simple to header construction can be hardwired.
+//allow run due simple to header construction - can be hardwired.
 #define motor_Dir     5
 #define motor_Step    6
-
+//clk at 7 is not used
 #define pdn           8 
-
+// nc 9 is not used)
 #define motor_M1      10
 #define motor_M2      11
 #define motor_Enable  12
